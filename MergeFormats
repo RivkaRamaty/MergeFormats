@@ -1,0 +1,92 @@
+import json
+import csv
+
+CSV_DATA_FILE = 'Aeden_session_1_trial_1.csv'
+JSON_DATA_FILE = 'Aeden_session_1_trial_1.json'
+
+
+def read_data():
+    # Load the data in the json file.
+    with open(JSON_DATA_FILE, 'r') as read_file:
+        json_info = json.load(read_file)
+
+    # Load the data in the csv file.
+    # Use DictReader() to get the DictReader object
+    with open(CSV_DATA_FILE) as read_csv:
+        csv_dict_list = {}
+        reader = csv.DictReader(read_csv, delimiter='\n')
+        for line in reader:
+            values = list(line.values())[0].split(',')
+            key = values.pop(0)
+            csv_dict_list[key] = values
+    return json_info, csv_dict_list
+
+
+def get_keypoints(index_val):
+    # Get the keypoints values from the csv file
+    key_points = {}
+    all_body_parts = csv_data['bodyparts']
+    all_body_parts = sorted(set(all_body_parts), key=all_body_parts.index)
+    for idx, body_part in enumerate(all_body_parts):
+        key_points[str(body_part).lower()] = {
+            'x1': float(csv_data[index_val][idx * 3]),
+            'y1': float(csv_data[index_val][idx * 3 + 1]),
+            'rate': float(csv_data[index_val][idx * 3 + 2])
+        }
+    return key_points
+
+
+def create_frame_annotations_objects(index_val):
+    frame_annotations = {'attributes': {}, 'keypoints': get_keypoints(index_val)}
+    dogs_info = json_data['frame_annotations'][index_val]['dogs'][0]
+
+    # Set all the values with the same property name as in the json file resource
+    json_properties = ['category', 'id', 'rate']
+    for json_property in json_properties:
+        frame_annotations[json_property] = dogs_info[json_property]
+
+    # Set the 'children' value by checking if there is value under the children property in the JSON file
+    children = []
+    if dogs_info['children'] is not None:
+        for child in dogs_info['children']:
+            children.append(child)
+    frame_annotations['children'] = children
+
+    # Set the 'coordinates' value according to the data in the JSON file
+    frame_annotations['coordinates'] = {}
+    coordinates = ['x1', 'x2', 'y1', 'y2']
+    for coordinate in coordinates:
+        frame_annotations['coordinates'][coordinate] = dogs_info[coordinate]
+    return frame_annotations
+
+
+def insert_frame_annotations_data(data_object, index_val):
+    # Set the 'frame_annotations' data object
+    frame_annotations_path = data_object['frame_annotations']
+    frame_annotations_path[index_val] = {}
+    frame_annotations_path[index_val]['frame_index'] = json_data['frame_annotations'][index_val]['frame_index']
+    frame_annotations_path[index_val]['objects'] = [create_frame_annotations_objects(index_val)]
+    frame_annotations_path[index_val]['objects'][0] = dict(sorted(frame_annotations_path[index_val]['objects'][0].items()))
+
+
+def create_merged_file(data_object):
+    # Define all the missing values and set their value to null
+    properties = ['existed_task', 'video_name', 'fps', 'width', 'height']
+    for final_property in properties:
+        data_object[final_property] = None
+    data_object['frame_annotations'] = {}
+
+    # Add the 'frame_annotations' properties that existing in the json file
+    # Create the merged Object
+    indices = json_data['frame_annotations']
+    for index in indices:
+        insert_frame_annotations_data(data, index)
+
+    # write the final data object to json file
+    with open('target.json', 'w') as target:
+        json.dump(data_object, target, ensure_ascii=False, indent=4)
+
+
+json_data, csv_data = read_data()
+data = {}
+create_merged_file(data)
